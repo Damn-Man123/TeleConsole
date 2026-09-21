@@ -11,7 +11,7 @@ permissions:
 
 env:
   # Name of your main Python file in the repo root
-  ENTRY_FILE: telegram_console.py
+  ENTRY_FILE: consoleT.py
 
 jobs:
   build:

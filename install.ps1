@@ -93,9 +93,9 @@
 
     # ---------- notice ----------
     Write-Host ''
-    Write-Host '  TeleConsole - created by SSSB (Jasmine)' -ForegroundColor Cyan
-    Write-Host '  All rights reserved. Copying, modifying or redistributing this tool' -ForegroundColor DarkGray
-    Write-Host "  without the author's permission is not allowed." -ForegroundColor DarkGray
+    Write-Host '  TeleConsole - created by SSSB (Jasmine)' -ForegroundColor Red
+    Write-Host '  All rights reserved. Copying, modifying or redistributing this tool' -ForegroundColor Green
+    Write-Host "  without the author's permission is not allowed." -ForegroundColor Green
     Write-Host ''
 
     # ---------- download and verify ----------

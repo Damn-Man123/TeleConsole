@@ -3,7 +3,9 @@
 #
 # Downloads the latest TeleConsole.exe into a temporary folder (with a progress bar), verifies its
 # SHA-256 checksum, runs it, and deletes everything (program + login data) when you close it.
-# Nothing is installed on the computer.
+# Nothing is installed on the computer. Shows the author's name and license notice first.
+# The tool is started in your Documents folder, so any
+# files it exports (for example saved member lists) are kept.
 
 & {
     $ErrorActionPreference = 'Stop'
@@ -72,20 +74,29 @@
         }
     }
 
-    # Deletes a folder, retrying briefly in case antivirus is still scanning a file inside it
+    # Deletes a folder, retrying briefly in case antivirus is still scanning a file inside it.
+    # Returns $true when the folder is gone, $false if it could not be removed.
     function Remove-Folder([string]$Path) {
         for ($i = 0; $i -lt 6; $i++) {
-            if (-not (Test-Path -LiteralPath $Path)) { return }
+            if (-not (Test-Path -LiteralPath $Path)) { return $true }
             Remove-Item -LiteralPath $Path -Recurse -Force -ErrorAction SilentlyContinue
-            if (-not (Test-Path -LiteralPath $Path)) { return }
+            if (-not (Test-Path -LiteralPath $Path)) { return $true }
             Start-Sleep -Milliseconds 700
         }
+        return $false
     }
 
     # Clean up leftovers from earlier runs that were closed abruptly (older than 1 day)
     Get-ChildItem -LiteralPath $env:TEMP -Directory -Filter 'TeleConsole_run_*' -ErrorAction SilentlyContinue |
         Where-Object { $_.LastWriteTime -lt (Get-Date).AddDays(-1) } |
-        ForEach-Object { Remove-Folder $_.FullName }
+        ForEach-Object { $null = Remove-Folder $_.FullName }
+
+    # ---------- notice ----------
+    Write-Host ''
+    Write-Host '  TeleConsole - created by SSSB (Jasmine)' -ForegroundColor Cyan
+    Write-Host '  All rights reserved. Copying, modifying or redistributing this tool' -ForegroundColor DarkGray
+    Write-Host "  without the author's permission is not allowed." -ForegroundColor DarkGray
+    Write-Host ''
 
     # ---------- download and verify ----------
     $ready = $false
@@ -120,16 +131,20 @@
     }
 
     if (-not $ready) {
-        Remove-Folder $work
+        $null = Remove-Folder $work
         return
     }
 
     # ---------- run, then delete everything ----------
+    # Start the tool in Documents so files it saves (e.g. member lists) are not deleted with the temp folder
+    $startDir = [Environment]::GetFolderPath('MyDocuments')
+    if (-not $startDir -or -not (Test-Path -LiteralPath $startDir)) { $startDir = $HOME }
+
     $oldAppData = $env:APPDATA
     try {
         $env:APPDATA = $data                 # the app saves its login files under APPDATA, so they land in our temp folder
         $env:TELECONSOLE_TEMP = '1'          # tells the app this is a one-time run
-        Push-Location $work
+        Push-Location $startDir
         try { & $exe } finally { Pop-Location }
     }
     catch {
@@ -138,7 +153,10 @@
     finally {
         $env:APPDATA = $oldAppData
         Remove-Item Env:\TELECONSOLE_TEMP -ErrorAction SilentlyContinue
-        Remove-Folder $work
-        Write-Host 'Temporary files removed.' -ForegroundColor DarkGray
+        if (Remove-Folder $work) {
+            Write-Host 'Temporary files removed.' -ForegroundColor DarkGray
+        } else {
+            Write-Host "Could not remove everything. Delete this folder yourself: $work" -ForegroundColor Yellow
+        }
     }
 }

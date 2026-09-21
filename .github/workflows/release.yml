@@ -1,0 +1,50 @@
+name: Build and release
+
+# Push a tag like v1.0.0 to build the .exe and publish it as a GitHub Release.
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+env:
+  # Name of your main Python file in the repo root
+  ENTRY_FILE: telegram_console.py
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pyinstaller
+
+      - name: Build TeleConsole.exe
+        run: pyinstaller --onefile --console --name TeleConsole "$env:ENTRY_FILE"
+
+      - name: Create SHA-256 checksum
+        shell: pwsh
+        run: |
+          $hash = (Get-FileHash dist\TeleConsole.exe -Algorithm SHA256).Hash.ToLower()
+          "$hash  TeleConsole.exe" | Out-File -FilePath dist\TeleConsole.exe.sha256 -Encoding ascii
+          Write-Host "SHA-256: $hash"
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/TeleConsole.exe
+            dist/TeleConsole.exe.sha256
+          generate_release_notes: true

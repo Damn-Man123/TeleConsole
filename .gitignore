@@ -1,0 +1,19 @@
+# NEVER commit these: a .session file gives full access to a Telegram account
+*.session
+*.session-journal
+telegram_config.json
+
+# Scraped member lists created by the tool
+members_*.txt
+members_*.csv
+
+# Build output
+build/
+dist/
+*.spec
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/

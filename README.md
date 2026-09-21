@@ -50,3 +50,7 @@ pyinstaller --onefile --console --name TeleConsole telegram_console.py
 ```
 
 Releases are built automatically by GitHub Actions when a tag such as `v1.0.0` is pushed.
+
+## About
+
+This tool was created by Soksambatt Sar (Jasmine). All rights reserved. Modification, redistribution, and licensing are controlled by the author.

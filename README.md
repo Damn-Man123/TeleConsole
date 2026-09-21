@@ -46,7 +46,7 @@ This tool is intended for managing accounts, groups, and channels that you own o
 
 ```powershell
 pip install -r requirements.txt pyinstaller
-pyinstaller --onefile --console --name TeleConsole telegram_console.py
+pyinstaller --onefile --console --name TeleConsole consoleT.py
 ```
 
 Releases are built automatically by GitHub Actions when a tag such as `v1.0.0` is pushed.

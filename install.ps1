@@ -1,8 +1,9 @@
-# TeleConsole installer / launcher
+# TeleConsole one-time launcher
 # Usage (PowerShell):  irm https://raw.githubusercontent.com/Damn-Man123/TeleConsole/main/install.ps1 | iex
 #
-# Downloads the latest TeleConsole.exe from GitHub Releases (with a progress bar),
-# checks its SHA-256 checksum, saves it to %LOCALAPPDATA%\TeleConsole and runs it.
+# Downloads the latest TeleConsole.exe into a temporary folder (with a progress bar), verifies its
+# SHA-256 checksum, runs it, and deletes everything (program + login data) when you close it.
+# Nothing is installed on the computer.
 
 & {
     $ErrorActionPreference = 'Stop'
@@ -12,9 +13,9 @@
 
     $repo = 'Damn-Man123/TeleConsole'
     $base = "https://github.com/$repo/releases/latest/download"
-    $dir  = Join-Path $env:LOCALAPPDATA 'TeleConsole'
-    $exe  = Join-Path $dir 'TeleConsole.exe'
-    $tmp  = Join-Path $env:TEMP ('TeleConsole_' + [guid]::NewGuid().ToString('N'))
+    $work = Join-Path $env:TEMP ('TeleConsole_run_' + [guid]::NewGuid().ToString('N'))
+    $data = Join-Path $work 'data'                # login/config files live here for this run only
+    $exe  = Join-Path $work 'TeleConsole.exe'
 
     # Builds one line of the progress bar, e.g.
     #   Downloading  [########............]  50%  12.5/25.0 MB  8.2 MB/s
@@ -71,6 +72,23 @@
         }
     }
 
+    # Deletes a folder, retrying briefly in case antivirus is still scanning a file inside it
+    function Remove-Folder([string]$Path) {
+        for ($i = 0; $i -lt 6; $i++) {
+            if (-not (Test-Path -LiteralPath $Path)) { return }
+            Remove-Item -LiteralPath $Path -Recurse -Force -ErrorAction SilentlyContinue
+            if (-not (Test-Path -LiteralPath $Path)) { return }
+            Start-Sleep -Milliseconds 700
+        }
+    }
+
+    # Clean up leftovers from earlier runs that were closed abruptly (older than 1 day)
+    Get-ChildItem -LiteralPath $env:TEMP -Directory -Filter 'TeleConsole_run_*' -ErrorAction SilentlyContinue |
+        Where-Object { $_.LastWriteTime -lt (Get-Date).AddDays(-1) } |
+        ForEach-Object { Remove-Folder $_.FullName }
+
+    # ---------- download and verify ----------
+    $ready = $false
     $oldEncoding = $null
     try {
         try {
@@ -78,38 +96,49 @@
             [Console]::OutputEncoding = [Text.Encoding]::UTF8   # so the bar characters display correctly
         } catch { }
 
-        New-Item -ItemType Directory -Force -Path $dir, $tmp | Out-Null
-        $dl = Join-Path $tmp 'TeleConsole.exe'
-        $hf = Join-Path $tmp 'TeleConsole.exe.sha256'
+        New-Item -ItemType Directory -Force -Path $data | Out-Null
+        $hf = Join-Path $work 'TeleConsole.exe.sha256'
 
         Write-Host 'Getting the latest TeleConsole...' -ForegroundColor Cyan
-        Get-FileWithProgress "$base/TeleConsole.exe" $dl 'Downloading'
+        Get-FileWithProgress "$base/TeleConsole.exe" $exe 'Downloading'
         Invoke-WebRequest -Uri "$base/TeleConsole.exe.sha256" -OutFile $hf -UseBasicParsing
 
         Write-Host '  Verifying download...' -ForegroundColor Cyan
         $expected = ((Get-Content $hf -Raw).Trim() -split '\s+')[0].ToLower()
-        $actual   = (Get-FileHash $dl -Algorithm SHA256).Hash.ToLower()
+        $actual   = (Get-FileHash $exe -Algorithm SHA256).Hash.ToLower()
         if ($actual -ne $expected) {
             throw 'Checksum mismatch: the download is corrupted or has been tampered with.'
         }
-
-        try {
-            Copy-Item $dl $exe -Force
-        } catch {
-            throw 'Could not update TeleConsole.exe. Close any running TeleConsole window and try again.'
-        }
         Write-Host '  Ready.' -ForegroundColor Green
+        $ready = $true
     }
     catch {
-        Write-Host "TeleConsole install failed: $($_.Exception.Message)" -ForegroundColor Red
-        return
+        Write-Host "TeleConsole download failed: $($_.Exception.Message)" -ForegroundColor Red
     }
     finally {
         if ($oldEncoding) { try { [Console]::OutputEncoding = $oldEncoding } catch { } }
-        Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
     }
 
-    # Run from the app folder so session/config files are kept in one place
-    Push-Location $dir
-    try { & $exe } finally { Pop-Location }
+    if (-not $ready) {
+        Remove-Folder $work
+        return
+    }
+
+    # ---------- run, then delete everything ----------
+    $oldAppData = $env:APPDATA
+    try {
+        $env:APPDATA = $data                 # the app saves its login files under APPDATA, so they land in our temp folder
+        $env:TELECONSOLE_TEMP = '1'          # tells the app this is a one-time run
+        Push-Location $work
+        try { & $exe } finally { Pop-Location }
+    }
+    catch {
+        Write-Host "Could not start TeleConsole: $($_.Exception.Message)" -ForegroundColor Red
+    }
+    finally {
+        $env:APPDATA = $oldAppData
+        Remove-Item Env:\TELECONSOLE_TEMP -ErrorAction SilentlyContinue
+        Remove-Folder $work
+        Write-Host 'Temporary files removed.' -ForegroundColor DarkGray
+    }
 }
